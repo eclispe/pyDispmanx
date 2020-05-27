@@ -1,0 +1,5 @@
+Licenses for files in this project are stated in the header of each file. Below is a summary
+
+This project uses some common files from the https://github.com/AndrewFromMelbourne/raspidmx examples project and those files retain their original licence (see file headers for details).
+
+All other files are licensed under GNU LGPL version 3. See file headers, the COPYING file and COPYING.LESSER file for more details.
