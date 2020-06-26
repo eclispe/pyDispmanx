@@ -33,12 +33,6 @@
 
 //-------------------------------------------------------------------------
 
-#ifndef ALIGN_TO_16
-#define ALIGN_TO_16(x)  ((x + 15) & ~15)
-#endif
-
-//-------------------------------------------------------------------------
-
 void setPixel4BPP(IMAGE_T *image, int32_t x, int32_t y, int8_t index);
 void setPixel8BPP(IMAGE_T *image, int32_t x, int32_t y, int8_t index);
 void setPixelRGB565(IMAGE_T *image, int32_t x, int32_t y, const RGBA8_T *rgba);
@@ -152,8 +146,8 @@ bool initImage(
     image->type = type;
     image->width = width;
     image->height = height;
-    image->pitch = (ALIGN_TO_16(width) * image->bitsPerPixel) / 8;
-    image->alignedHeight = ALIGN_TO_16(height);
+    image->pitch = (width * image->bitsPerPixel) / 8;
+    image->alignedHeight = height;
     image->size = image->pitch * image->alignedHeight;
 
     image->buffer = calloc(1, image->size);
