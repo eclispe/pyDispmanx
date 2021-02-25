@@ -1,5 +1,5 @@
 /*  PyDispmanx provides a buffer interface to a Raspberry Pi GPU layer
-*   Copyright (C) 2020  Tim Clark
+*   Copyright (C) 2020,2021  Tim Clark
 *
 *   This program is free software: you can redistribute it and/or modify
 *   it under the terms of the GNU Lesser General Public License as published by
@@ -25,6 +25,97 @@
 #include "imageLayer.h"
 
 #include "bcm_host.h"
+
+// struct to hold pixel aspect ratios
+typedef struct {
+    int16_t parWidth;
+    int16_t parHeight;
+    int16_t displayWidth;
+} pixelAspectRatio;
+
+static pixelAspectRatio getPixelAspect(TV_DISPLAY_STATE_T *tvstate){
+    bool valid = false;
+    uint16_t displayAspectW = 0;
+    uint16_t displayAspectH = 0;
+    if(tvstate->state & ( VC_HDMI_HDMI | VC_HDMI_DVI )) {
+        switch(tvstate->display.hdmi.aspect_ratio){
+            case HDMI_ASPECT_4_3:
+                displayAspectW = 4;
+                displayAspectH = 3;
+                valid = true;
+                break;
+            case HDMI_ASPECT_14_9:
+                displayAspectW = 14;
+                displayAspectH = 9;
+                valid = true;
+                break;
+            case HDMI_ASPECT_16_9:
+                displayAspectW = 16;
+                displayAspectH = 9;
+                valid = true;
+                break;
+            case HDMI_ASPECT_5_4:
+                displayAspectW = 5;
+                displayAspectH = 4;
+                valid = true;
+                break;
+            case HDMI_ASPECT_16_10:
+                displayAspectW = 16;
+                displayAspectH = 10;
+                valid = true;
+                break;
+            case HDMI_ASPECT_15_9:
+                displayAspectW = 15;
+                displayAspectH = 10;
+                valid = true;
+                break;
+            case HDMI_ASPECT_64_27:
+                displayAspectW = 64;
+                displayAspectH = 27;
+                valid = true;
+                break;
+        }
+    } else if(tvstate->state & ( VC_SDTV_NTSC | VC_SDTV_PAL )) {
+        switch(tvstate->display.sdtv.display_options.aspect){
+            case SDTV_ASPECT_4_3:
+                displayAspectW = 4;
+                displayAspectH = 3;
+                valid = true;
+                break;
+            case SDTV_ASPECT_14_9:
+                displayAspectW = 14;
+                displayAspectH = 9;
+                valid = true;
+                break;
+            case SDTV_ASPECT_16_9:
+                displayAspectW = 16;
+                displayAspectH = 9;
+                valid = true;
+                break;
+            case SDTV_ASPECTFORCE_32BIT:
+            case SDTV_ASPECT_UNKNOWN:
+                break;
+        }
+    }
+    if(valid){
+        uint16_t pixelAspectWRaw = displayAspectW*tvstate->display.hdmi.height;
+        uint16_t pixelAspectHRaw = displayAspectH*tvstate->display.hdmi.width;
+
+        // gcd
+           uint16_t gcd = pixelAspectWRaw; // a input
+           uint16_t gcdB = pixelAspectHRaw; // b input
+           uint16_t gcdTemp; // temp value
+        while (gcdB != 0) {
+            gcdTemp = gcd % gcdB;
+            gcd = gcdB;
+                   gcdB = gcdTemp;
+        }
+
+        return (pixelAspectRatio){pixelAspectWRaw/gcd, pixelAspectHRaw/gcd, (tvstate->display.hdmi.width*pixelAspectWRaw)/pixelAspectHRaw};
+    } else {
+        return (pixelAspectRatio){1, 1, tvstate->display.hdmi.width};
+    }
+}
 
 // Python layer object struct
 typedef struct {
@@ -58,10 +149,13 @@ static int dispmanxLayer_init (dispmanxLayer *self, PyObject *args, PyObject *kw
     }
     DISPMANX_MODEINFO_T info;
     vc_dispmanx_display_get_info (self->display, &info);
-    initImage (& (self->imageLayer.image), VC_IMAGE_RGBA32, info.width, info.height, true);
+    TV_DISPLAY_STATE_T tvstate;
+    vc_tv_get_display_state_id( 0, &tvstate);
+    pixelAspectRatio par = getPixelAspect(&tvstate);
+    initImage (& (self->imageLayer.image), VC_IMAGE_RGBA32, par.displayWidth, info.height, true);
     createResourceImageLayer (& (self->imageLayer), self->number);
     DISPMANX_UPDATE_HANDLE_T update = vc_dispmanx_update_start (0);
-    addElementImageLayerOffset (& (self->imageLayer), 0, 0, self->display, update);
+    addElementImageLayerOffset (& (self->imageLayer), 0, 0, &info, self->display, update);
     vc_dispmanx_update_submit_sync (update);
     return 0;
 }
@@ -90,7 +184,10 @@ static PyMethodDef dispmanxMethods[] = {
 static PyObject *dispmanx_getsize (dispmanxLayer *self, void *closure) {
     DISPMANX_MODEINFO_T info;
     vc_dispmanx_display_get_info (self->display, &info);
-    return Py_BuildValue ("(ii)", info.width, info.height);
+    TV_DISPLAY_STATE_T tvstate;
+    vc_tv_get_display_state_id( 0, &tvstate);
+    pixelAspectRatio par = getPixelAspect(&tvstate);
+    return Py_BuildValue ("(ii)", par.displayWidth, info.height);
 }
 
 static PyGetSetDef dispmanx_getsetters[] = {
@@ -157,14 +254,34 @@ static PyObject *pydispmanx_getDisplaySize (PyObject *self, void *closure) {
         DISPMANX_MODEINFO_T info;
         vc_dispmanx_display_get_info (display, &info);
         vc_dispmanx_display_close (display);
-        return Py_BuildValue ("(ii)", info.width, info.height);
+        TV_DISPLAY_STATE_T tvstate;
+        vc_tv_get_display_state_id( display, &tvstate);
+        pixelAspectRatio par = getPixelAspect(&tvstate);
+        return Py_BuildValue ("(ii)", par.displayWidth, info.height);
     } else {
         Py_RETURN_FALSE;
     }
 }
 
+
+
+// function to get the pixel aspect ratio directly from the module
+static PyObject *pydispmanx_getPixelAspectRatio (PyObject *self, void *closure) {
+    bcm_host_init();
+    DISPMANX_DISPLAY_HANDLE_T display = vc_dispmanx_display_open (0);
+    if (display!=0) {
+        TV_DISPLAY_STATE_T tvstate;
+        vc_tv_get_display_state_id( 0, &tvstate);
+        pixelAspectRatio par = getPixelAspect(&tvstate);
+        return Py_BuildValue ("(ii)", par.parWidth, par.parHeight);
+    } else {
+         Py_RETURN_FALSE;
+    }
+}
+
 static PyMethodDef pydispmanxMethods[] = {
     {"getDisplaySize", (PyCFunction) pydispmanx_getDisplaySize, METH_NOARGS, "Get the display size as a tuple"},
+    {"getPixelAspectRatio", (PyCFunction) pydispmanx_getPixelAspectRatio, METH_NOARGS, "Get the pixel aspect ratio as a tuple"},
     {NULL}
 };
 

@@ -87,6 +87,7 @@ addElementImageLayerOffset(
     IMAGE_LAYER_T *il,
     int32_t xOffset,
     int32_t yOffset,
+    DISPMANX_MODEINFO_T *info,
     DISPMANX_DISPLAY_HANDLE_T display,
     DISPMANX_UPDATE_HANDLE_T update)
 {
@@ -99,8 +100,8 @@ addElementImageLayerOffset(
     vc_dispmanx_rect_set(&(il->dstRect),
                          xOffset,
                          yOffset,
-                         il->image.width,
-                         il->image.height);
+                         info->width,
+                         info->height);
 
     addElementImageLayer(il, display, update);
 }
@@ -121,10 +122,10 @@ addElementImageLayerCentered(
                          il->image.height << 16);
 
     vc_dispmanx_rect_set(&(il->dstRect),
-                         (info->width - il->image.width) / 2,
-                         (info->height - il->image.height) / 2,
-                         il->image.width,
-                         il->image.height);
+                         (info->width - (il->image.width*2)) / 2,
+                         (info->height - (il->image.height*2)) / 2,
+                         info->width,
+                         info->height);
 
     addElementImageLayer(il, display, update);
 }
@@ -212,13 +213,14 @@ moveImageLayer(
     IMAGE_LAYER_T *il,
     int32_t xOffset,
     int32_t yOffset,
+    DISPMANX_MODEINFO_T *info,
     DISPMANX_UPDATE_HANDLE_T update)
 {
     vc_dispmanx_rect_set(&(il->dstRect),
                          xOffset,
                          yOffset,
-                         il->image.width,
-                         il->image.height);
+                         info->width,
+                         info->height);
 
     int result =
     vc_dispmanx_element_change_attributes(update,

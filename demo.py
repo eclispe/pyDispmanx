@@ -1,5 +1,6 @@
 import pydispmanx, time, pygame
 print(pydispmanx.getDisplaySize())
+print(pydispmanx.getPixelAspectRatio())
 testlayer = pydispmanx.dispmanxLayer(3);
 pygame_surface = pygame.image.frombuffer(testlayer, testlayer.size, 'RGBA')
 trials = 100

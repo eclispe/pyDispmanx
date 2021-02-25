@@ -64,6 +64,7 @@ addElementImageLayerOffset(
     IMAGE_LAYER_T *il,
     int32_t xOffset,
     int32_t yOffset,
+    DISPMANX_MODEINFO_T *info,
     DISPMANX_DISPLAY_HANDLE_T display,
     DISPMANX_UPDATE_HANDLE_T update);
 
@@ -94,6 +95,7 @@ moveImageLayer(
     IMAGE_LAYER_T *il,
     int32_t xOffset,
     int32_t yOffset,
+    DISPMANX_MODEINFO_T *info,
     DISPMANX_UPDATE_HANDLE_T update);
 
 
