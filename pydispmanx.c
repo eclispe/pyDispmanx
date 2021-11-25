@@ -26,6 +26,8 @@
 
 #include "bcm_host.h"
 
+#define DEFAULT_DISPLAY 0
+
 // struct to hold pixel aspect ratios
 typedef struct {
     int16_t parWidth;
@@ -120,6 +122,7 @@ static pixelAspectRatio getPixelAspect(TV_DISPLAY_STATE_T *tvstate){
 // Python layer object struct
 typedef struct {
     PyObject_HEAD
+    int8_t displayId;
     int32_t number;
     IMAGE_LAYER_T imageLayer;
     DISPMANX_DISPLAY_HANDLE_T display;
@@ -132,25 +135,50 @@ static PyObject *dispmanxLayer_new (PyTypeObject *type, PyObject *args, PyObject
 
     bcm_host_init();
     if (self != NULL) {
-        self->number = 1;
-        self->display = vc_dispmanx_display_open (0);
-        if (self->display == 0) {
-            vc_dispmanx_display_close (self->display);
-            return NULL;
+        self->displayId = DEFAULT_DISPLAY;
+        TV_ATTACHED_DEVICES_T devices;
+        if (vc_tv_get_attached_devices(&devices) != -1 && devices.num_attached > 0) {
+            self->displayId = devices.display_number[0];
         }
+        self->number = 1;
     }
     return (PyObject *) self;
 }
 
 // create a fullscreen transparent layer when a new object is created
 static int dispmanxLayer_init (dispmanxLayer *self, PyObject *args, PyObject *kwds)  {
-    if (!PyArg_ParseTuple (args, "i", &self->number)) {
+    if (!PyArg_ParseTuple (args, "i|b", &self->number, &self->displayId)) {
+        return -1;
+    }
+
+    TV_ATTACHED_DEVICES_T devices;
+    if (vc_tv_get_attached_devices(&devices) == -1) {
+        return -1;
+    }
+    if (devices.num_attached<1) {
+        PyErr_SetString(PyExc_RuntimeError, "No display connected");
+        return -1;
+    }
+    bool found = false;
+    for(uint32_t i = 0; i < devices.num_attached; i++) {
+        if(devices.display_number[i] == self->displayId) {
+             found = true;
+        }
+    }
+    if(!found){
+        PyErr_SetString(PyExc_ValueError, "Display ID invalid");
+        return -1;
+    }
+
+    self->display = vc_dispmanx_display_open (self->displayId);
+    if (self->display == 0) {
+        vc_dispmanx_display_close (self->display);
         return -1;
     }
     DISPMANX_MODEINFO_T info;
     vc_dispmanx_display_get_info (self->display, &info);
     TV_DISPLAY_STATE_T tvstate;
-    vc_tv_get_display_state_id( 0, &tvstate);
+    vc_tv_get_display_state_id( self->displayId, &tvstate);
     pixelAspectRatio par = getPixelAspect(&tvstate);
     initImage (& (self->imageLayer.image), VC_IMAGE_RGBA32, par.displayWidth, info.height, true);
     createResourceImageLayer (& (self->imageLayer), self->number);
@@ -185,7 +213,7 @@ static PyObject *dispmanx_getsize (dispmanxLayer *self, void *closure) {
     DISPMANX_MODEINFO_T info;
     vc_dispmanx_display_get_info (self->display, &info);
     TV_DISPLAY_STATE_T tvstate;
-    vc_tv_get_display_state_id( 0, &tvstate);
+    vc_tv_get_display_state_id( self->displayId, &tvstate);
     pixelAspectRatio par = getPixelAspect(&tvstate);
     return Py_BuildValue ("(ii)", par.displayWidth, info.height);
 }
@@ -263,17 +291,28 @@ static PyObject *pydispmanx_getDisplays (PyObject *self, void *closure) {
 }
 
 // function to get the display size directly from the module
-static PyObject *pydispmanx_getDisplaySize (PyObject *self, void *closure) {
+static PyObject *pydispmanx_getDisplaySize (PyObject *self, PyObject *args) {
     bcm_host_init();
-    DISPMANX_DISPLAY_HANDLE_T display = vc_dispmanx_display_open (0);
-    if (display!=0) {
-        DISPMANX_MODEINFO_T info;
-        vc_dispmanx_display_get_info (display, &info);
-        vc_dispmanx_display_close (display);
-        TV_DISPLAY_STATE_T tvstate;
-        vc_tv_get_display_state_id( display, &tvstate);
-        pixelAspectRatio par = getPixelAspect(&tvstate);
-        return Py_BuildValue ("(ii)", par.displayWidth, info.height);
+    uint8_t displayId = DEFAULT_DISPLAY;
+    TV_ATTACHED_DEVICES_T devices;
+    if (vc_tv_get_attached_devices(&devices) != -1 && devices.num_attached > 0) {
+        displayId = devices.display_number[0];
+        if(PyArg_ParseTuple(args, "|b", &displayId)){
+            DISPMANX_DISPLAY_HANDLE_T display = vc_dispmanx_display_open (displayId);
+            if (display!=0) {
+                DISPMANX_MODEINFO_T info;
+                vc_dispmanx_display_get_info (display, &info);
+                TV_DISPLAY_STATE_T tvstate;
+                vc_tv_get_display_state_id( displayId, &tvstate);
+                pixelAspectRatio par = getPixelAspect(&tvstate);
+                vc_dispmanx_display_close (display);
+                return Py_BuildValue ("(ii)", par.displayWidth, info.height);
+            } else {
+                Py_RETURN_FALSE;
+            }
+        } else {
+            Py_RETURN_FALSE;
+        }
     } else {
         Py_RETURN_FALSE;
     }
@@ -282,14 +321,25 @@ static PyObject *pydispmanx_getDisplaySize (PyObject *self, void *closure) {
 
 
 // function to get the pixel aspect ratio directly from the module
-static PyObject *pydispmanx_getPixelAspectRatio (PyObject *self, void *closure) {
+static PyObject *pydispmanx_getPixelAspectRatio (PyObject *self, PyObject *args) {
     bcm_host_init();
-    DISPMANX_DISPLAY_HANDLE_T display = vc_dispmanx_display_open (0);
-    if (display!=0) {
-        TV_DISPLAY_STATE_T tvstate;
-        vc_tv_get_display_state_id( 0, &tvstate);
-        pixelAspectRatio par = getPixelAspect(&tvstate);
-        return Py_BuildValue ("(ii)", par.parWidth, par.parHeight);
+    uint8_t displayId = DEFAULT_DISPLAY;
+    TV_ATTACHED_DEVICES_T devices;
+    if (vc_tv_get_attached_devices(&devices) != -1 && devices.num_attached > 0) {
+        displayId = devices.display_number[0];
+        if(PyArg_ParseTuple(args, "|b", &displayId)){
+            DISPMANX_DISPLAY_HANDLE_T display = vc_dispmanx_display_open (displayId);
+            if (display!=0) {
+                TV_DISPLAY_STATE_T tvstate;
+                vc_tv_get_display_state_id( displayId, &tvstate);
+                pixelAspectRatio par = getPixelAspect(&tvstate);
+                return Py_BuildValue ("(ii)", par.parWidth, par.parHeight);
+            } else {
+                Py_RETURN_FALSE;
+            }
+        } else {
+            Py_RETURN_FALSE;
+        }
     } else {
          Py_RETURN_FALSE;
     }
@@ -297,8 +347,8 @@ static PyObject *pydispmanx_getPixelAspectRatio (PyObject *self, void *closure) 
 
 static PyMethodDef pydispmanxMethods[] = {
     {"getDisplays", (PyCFunction) pydispmanx_getDisplays, METH_NOARGS, "Return a list of valid display numbers"},
-    {"getDisplaySize", (PyCFunction) pydispmanx_getDisplaySize, METH_NOARGS, "Get the display size as a tuple"},
-    {"getPixelAspectRatio", (PyCFunction) pydispmanx_getPixelAspectRatio, METH_NOARGS, "Get the pixel aspect ratio as a tuple"},
+    {"getDisplaySize", (PyCFunction) pydispmanx_getDisplaySize, METH_VARARGS, "Get the display size as a tuple"},
+    {"getPixelAspectRatio", (PyCFunction) pydispmanx_getPixelAspectRatio, METH_VARARGS, "Get the pixel aspect ratio as a tuple"},
     {NULL}
 };
 
