@@ -1,4 +1,5 @@
 import pydispmanx, time, pygame
+print(pydispmanx.getDisplays())
 print(pydispmanx.getDisplaySize())
 print(pydispmanx.getPixelAspectRatio())
 testlayer = pydispmanx.dispmanxLayer(3);

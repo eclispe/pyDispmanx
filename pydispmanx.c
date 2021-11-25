@@ -245,6 +245,22 @@ static PyTypeObject dispmanxLayerType = {
     .tp_as_buffer = &dispmanxLayer_as_buffer,
 };
 
+// function to get a list of valid display numbers
+static PyObject *pydispmanx_getDisplays (PyObject *self, void *closure) {
+    bcm_host_init();
+    TV_ATTACHED_DEVICES_T devices;
+    if (vc_tv_get_attached_devices(&devices) != -1) {
+        PyObject *pylist, *item;
+        pylist = PyList_New(devices.num_attached);
+        for(uint32_t i=0; i<devices.num_attached; i++) {
+            item = PyLong_FromLong(devices.display_number[i]);
+            PyList_SetItem(pylist, i, item);
+        }
+        return pylist;
+    } else {
+        return Py_BuildValue ("[]");
+    }
+}
 
 // function to get the display size directly from the module
 static PyObject *pydispmanx_getDisplaySize (PyObject *self, void *closure) {
@@ -280,6 +296,7 @@ static PyObject *pydispmanx_getPixelAspectRatio (PyObject *self, void *closure) 
 }
 
 static PyMethodDef pydispmanxMethods[] = {
+    {"getDisplays", (PyCFunction) pydispmanx_getDisplays, METH_NOARGS, "Return a list of valid display numbers"},
     {"getDisplaySize", (PyCFunction) pydispmanx_getDisplaySize, METH_NOARGS, "Get the display size as a tuple"},
     {"getPixelAspectRatio", (PyCFunction) pydispmanx_getPixelAspectRatio, METH_NOARGS, "Get the pixel aspect ratio as a tuple"},
     {NULL}
