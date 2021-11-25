@@ -318,6 +318,39 @@ static PyObject *pydispmanx_getDisplaySize (PyObject *self, PyObject *args) {
     }
 }
 
+// function to get the display size directly from the module
+static PyObject *pydispmanx_getFrameRate (PyObject *self, PyObject *args) {
+    bcm_host_init();
+    uint8_t displayId = DEFAULT_DISPLAY;
+    TV_ATTACHED_DEVICES_T devices;
+    if (vc_tv_get_attached_devices(&devices) != -1 && devices.num_attached > 0) {
+        displayId = devices.display_number[0];
+        if(PyArg_ParseTuple(args, "|b", &displayId)){
+            DISPMANX_DISPLAY_HANDLE_T display = vc_dispmanx_display_open (displayId);
+            if (display!=0) {
+                DISPMANX_MODEINFO_T info;
+                vc_dispmanx_display_get_info (display, &info);
+                TV_DISPLAY_STATE_T tvstate;
+                vc_tv_get_display_state_id( displayId, &tvstate);
+                uint16_t frameRate = 0;
+                if(tvstate.state & ( VC_HDMI_HDMI | VC_HDMI_DVI )) {
+                    frameRate=tvstate.display.hdmi.frame_rate;
+                } else if(tvstate.state & ( VC_SDTV_NTSC | VC_SDTV_PAL )) {
+                    frameRate=tvstate.display.sdtv.frame_rate;
+                }
+                vc_dispmanx_display_close (display);
+                return Py_BuildValue ("i", frameRate);
+            } else {
+                Py_RETURN_FALSE;
+            }
+        } else {
+            Py_RETURN_FALSE;
+        }
+    } else {
+        Py_RETURN_FALSE;
+    }
+}
+
 
 
 // function to get the pixel aspect ratio directly from the module
@@ -348,6 +381,7 @@ static PyObject *pydispmanx_getPixelAspectRatio (PyObject *self, PyObject *args)
 static PyMethodDef pydispmanxMethods[] = {
     {"getDisplays", (PyCFunction) pydispmanx_getDisplays, METH_NOARGS, "Return a list of valid display numbers"},
     {"getDisplaySize", (PyCFunction) pydispmanx_getDisplaySize, METH_VARARGS, "Get the display size as a tuple"},
+    {"getFrameRate", (PyCFunction) pydispmanx_getFrameRate, METH_VARARGS, "Get the display frame rate"},
     {"getPixelAspectRatio", (PyCFunction) pydispmanx_getPixelAspectRatio, METH_VARARGS, "Get the pixel aspect ratio as a tuple"},
     {NULL}
 };
