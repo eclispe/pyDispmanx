@@ -332,14 +332,18 @@ static PyObject *pydispmanx_getFrameRate (PyObject *self, PyObject *args) {
                 vc_dispmanx_display_get_info (display, &info);
                 TV_DISPLAY_STATE_T tvstate;
                 vc_tv_get_display_state_id( displayId, &tvstate);
-                uint16_t frameRate = 0;
-                if(tvstate.state & ( VC_HDMI_HDMI | VC_HDMI_DVI )) {
-                    frameRate=tvstate.display.hdmi.frame_rate;
-                } else if(tvstate.state & ( VC_SDTV_NTSC | VC_SDTV_PAL )) {
-                    frameRate=tvstate.display.sdtv.frame_rate;
+                // check if NTSC
+                HDMI_PROPERTY_PARAM_T property;
+                property.property = HDMI_PROPERTY_PIXEL_CLOCK_TYPE;
+                vc_tv_hdmi_get_property_id(displayId, &property);
+                float frameRate = 0;
+                if(property.param1 == HDMI_PIXEL_CLOCK_TYPE_NTSC){
+                    frameRate= tvstate.display.hdmi.frame_rate * (1000.0f/1001.0f);
+                } else {
+                    frameRate = tvstate.display.hdmi.frame_rate;
                 }
                 vc_dispmanx_display_close (display);
-                return Py_BuildValue ("i", frameRate);
+                return Py_BuildValue ("f", frameRate);
             } else {
                 Py_RETURN_FALSE;
             }
