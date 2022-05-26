@@ -32,6 +32,8 @@
 #include "image.h"
 #include "imageLayer.h"
 
+#define _unused(x) ((void)(x))
+
 //-------------------------------------------------------------------------
 
 void
@@ -78,6 +80,7 @@ createResourceImageLayer(
                                              il->image.buffer,
                                              &(il->bmpRect));
     assert(result == 0);
+    _unused(result); // Avoid compile time warning
 }
 
 //-------------------------------------------------------------------------
@@ -177,7 +180,7 @@ changeSourceImageLayer(
                                                il->element,
                                                il->resource);
     assert(result == 0);
-
+    _unused(result); // Avoid compile time warning
 }
 
 //-------------------------------------------------------------------------
@@ -203,7 +206,7 @@ changeSourceAndUpdateImageLayer(
 
     result = vc_dispmanx_update_submit_sync(update);
     assert(result == 0);
-
+    _unused(result); // Avoid compile time warning
 }
 
 //-------------------------------------------------------------------------
@@ -233,6 +236,7 @@ moveImageLayer(
                                           0,
                                           DISPMANX_NO_ROTATE);
     assert(result == 0);
+    _unused(result); // Avoid compile time warning
 }
 
 //-------------------------------------------------------------------------
@@ -254,7 +258,7 @@ destroyImageLayer(
 
     result = vc_dispmanx_resource_delete(il->resource);
     assert(result == 0);
-
+    _unused(result); // Avoid compile time warning
     //---------------------------------------------------------------------
 
     destroyImage(&(il->image));
